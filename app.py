@@ -195,7 +195,15 @@ def is_tester():
 def gate():
     if request.path.startswith("/static") or request.path in ("/healthz", "/robots.txt"):
         return
-    tok = request.args.get("tester")
+    if request.path == "/unlock":
+        if request.method == "GET":
+            return ('<!doctype html><meta name=viewport content="width=device-width"><title>Tester unlock</title>'
+                    '<body style="font-family:sans-serif;background:#140b24;color:#eee;display:grid;place-items:center;height:100vh">'
+                    '<form method=post><h2>Tester unlock</h2><input type=password name=tester placeholder="Passcode" autofocus '
+                    'style="padding:10px;font-size:16px"> <button style="padding:10px 16px">Unlock</button></form>')
+        tok = request.form.get("tester", "")
+    else:
+        tok = request.args.get("tester")
     if tok is not None:
         if TESTER_TOKEN and hmac.compare_digest(tok, TESTER_TOKEN):
             resp = make_response(redirect("/"))
