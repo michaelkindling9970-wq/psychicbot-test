@@ -3,7 +3,7 @@ os.environ["TESTER_TOKEN"] = "t0k"
 for k in ("OPENAI_API_KEY", "GEMINI_API_KEY", "GROQ_API_KEY", "XAI_API_KEY"): os.environ.pop(k, None)
 import app as A
 
-def geo(cc, rc): return lambda ip: {"country_code": cc, "region_code": rc, "source": "test"}
+def geo(cc, rc): return lambda ip, trace=None: {"country_code": cc, "region_code": rc, "source": "test"}
 
 def client(monkeypatch, cc="US", rc="CA"):
     monkeypatch.setattr(A, "geo_lookup", geo(cc, rc)); A._hits.clear(); return A.app.test_client()
@@ -16,7 +16,7 @@ def test_blocked_foreign_and_states(monkeypatch):
     for s in ["NY", "PA", "MA", "MD", "VA"]: assert client(monkeypatch, "US", s).get("/").status_code == 451
 
 def test_fail_closed(monkeypatch):
-    monkeypatch.setattr(A, "geo_lookup", lambda ip: None); assert A.app.test_client().get("/").status_code == 451
+    monkeypatch.setattr(A, "geo_lookup", lambda ip, trace=None: None); assert A.app.test_client().get("/").status_code == 451
 
 def test_tester_bypass_and_debug(monkeypatch):
     c = client(monkeypatch, "US", "NY")

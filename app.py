@@ -118,24 +118,60 @@ def client_ip():
     xff = request.headers.get("X-Forwarded-For", "")
     return xff.split(",")[0].strip() if xff else (request.remote_addr or "")
 
-def geo_lookup(ip):
+STATE_NAMES = {"new york": "NY", "pennsylvania": "PA", "massachusetts": "MA", "maryland": "MD", "virginia": "VA"}
+
+def _norm_region(code, name):
+    if code and len(code) == 2:
+        return code.upper()
+    return STATE_NAMES.get((name or "").strip().lower(), code or name)
+
+def _get(url):
+    return requests.get(url, timeout=4, headers={"User-Agent": "psychicbot-test/0.1"}).json()
+
+def _p_ipapi_com(ip):  # free, non-commercial, HTTP only
+    d = _get(f"http://ip-api.com/json/{ip}?fields=status,countryCode,region,regionName")
+    if d.get("status") == "success":
+        return d["countryCode"], _norm_region(d.get("region"), d.get("regionName"))
+
+def _p_ipinfo(ip):
+    d = _get(f"https://ipinfo.io/{ip}/json")
+    if d.get("country"):
+        return d["country"], _norm_region(None, d.get("region"))
+
+def _p_freeipapi(ip):
+    d = _get(f"https://freeipapi.com/api/json/{ip}")
+    if d.get("countryCode"):
+        return d["countryCode"], _norm_region(None, d.get("regionName"))
+
+def _p_ipwhois(ip):
+    d = _get(f"https://ipwho.is/{ip}")
+    if d.get("success"):
+        return d.get("country_code"), _norm_region(d.get("region_code"), d.get("region"))
+
+def _p_ipapi_co(ip):
+    d = _get(f"https://ipapi.co/{ip}/json/")
+    if not d.get("error") and d.get("country_code"):
+        return d["country_code"], _norm_region(d.get("region_code"), d.get("region"))
+
+GEO_PROVIDERS = [("ip-api.com", _p_ipapi_com), ("ipinfo.io", _p_ipinfo), ("freeipapi.com", _p_freeipapi),
+                 ("ipwho.is", _p_ipwhois), ("ipapi.co", _p_ipapi_co)]
+
+def geo_lookup(ip, trace=None):
     """Returns dict(country_code, region_code, source) or None on failure (caller fails closed)."""
-    if ip in _geo_cache and time.time() - _geo_cache[ip][0] < 3600:
+    if trace is None and ip in _geo_cache and time.time() - _geo_cache[ip][0] < 3600:
         return _geo_cache[ip][1]
     res = None
-    try:
-        d = requests.get(f"https://ipwho.is/{ip}", timeout=4).json()
-        if d.get("success"):
-            res = {"country_code": d.get("country_code"), "region_code": d.get("region_code"), "source": "ipwho.is"}
-    except Exception:
-        pass
-    if res is None:
+    for name, fn in GEO_PROVIDERS:
         try:
-            d = requests.get(f"https://ipapi.co/{ip}/json/", timeout=4).json()
-            if not d.get("error") and d.get("country_code"):
-                res = {"country_code": d["country_code"], "region_code": d.get("region_code"), "source": "ipapi.co"}
-        except Exception:
-            pass
+            out = fn(ip)
+        except Exception as e:
+            out = None
+            if trace is not None: trace[name] = type(e).__name__
+        else:
+            if trace is not None: trace[name] = out or "no result"
+        if out and out[0]:
+            res = {"country_code": out[0], "region_code": out[1], "source": name}
+            break
     if res:
         _geo_cache[ip] = (time.time(), res)
     return res
@@ -244,11 +280,12 @@ def debug_geo():
     if not is_tester():
         abort(403)
     ip = request.args.get("ip", "")
-    geo = geo_lookup(ip) if ip else None
+    trace = {}
+    geo = geo_lookup(ip, trace) if ip else None
     ok, why = geo_allowed(geo)
     if not ok:
-        return render_template("blocked.html", reason=why, debug={"ip": ip, "geo": geo}), 451
-    return jsonify(ip=ip, geo=geo, allowed=ok)
+        return render_template("blocked.html", reason=why, debug={"ip": ip, "geo": geo, "trace": trace}), 451
+    return jsonify(ip=ip, geo=geo, allowed=ok, trace=trace)
 
 if __name__ == "__main__":
     app.run(port=int(os.environ.get("PORT", 5055)))
