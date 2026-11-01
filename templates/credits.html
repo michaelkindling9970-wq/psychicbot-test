@@ -1,0 +1,2 @@
+{% extends "base.html" %}{% block body %}<div class="card"><h2>Photo credits</h2><p>All photos are real photographs from <a href="https://unsplash.com/?utm_source=psychicbot_test&utm_medium=referral">Unsplash</a>, used under the <a href="https://unsplash.com/license">Unsplash License</a>.</p><ul>
+{% for i in images %}<li>{{ i.theme }}: Photo by <a href="https://unsplash.com/@{{ i.user }}?utm_source=psychicbot_test&utm_medium=referral">{{ i.by }}</a> on <a href="{{ i.page }}">Unsplash</a></li>{% endfor %}</ul></div>{% endblock %}

@@ -1,0 +1,28 @@
+{% extends "base.html" %}{% block body %}
+<h1>🔮 Psychic Bot <span class="tag">AI-generated</span> {% if tester %}<span class="tag">tester</span>{% endif %}</h1>
+<div class="card" id="gate"><p>This is a <b>just-for-fun</b> novelty. Readings are made up by {{ 'an AI model' if provider else 'a template generator (mock mode)' }} and are not real predictions or advice.</p>
+<label><input type="checkbox" id="age"> I am 18 or older</label><br>
+<label><input type="checkbox" id="fun"> I understand this is for fun / entertainment only</label><br><br>
+<label class="small">Generator: <select id="mode">{% if provider %}<option value="ai">AI ({{ provider.model }})</option>{% endif %}<option value="mock">Template mock</option></select></label>
+{% if not provider %}<p class="small">No AI key configured - running in clearly labeled MOCK mode.</p>{% endif %}<br>
+<button id="go" disabled>Reveal my reading</button></div>
+<div class="card" id="out" hidden><img class="hero" id="img" alt=""><p class="small" id="credit"></p>
+<p id="text" style="font-size:20px"></p><p class="small" id="meta"></p>
+<details><summary>Here's what we used</summary><p class="small">Read from your browser on this page load and sent once to generate this reading. Nothing is stored, no cookies for tracking, no fingerprinting.</p><pre id="used"></pre></details></div>
+<script>
+const age=document.getElementById('age'),fun=document.getElementById('fun'),go=document.getElementById('go');
+const upd=()=>go.disabled=!(age.checked&&fun.checked);age.onchange=upd;fun.onchange=upd;
+function signals(){const d=new Date(),ua=navigator.userAgent;
+ const os=/Windows/.test(ua)?'Windows':/Mac OS X/.test(ua)&&!/Mobile/.test(ua)?'macOS':/Android/.test(ua)?'Android':/iPhone|iPad/.test(ua)?'iOS':/Linux/.test(ua)?'Linux':'other';
+ return {timezone:Intl.DateTimeFormat().resolvedOptions().timeZone,local_time:d.toLocaleTimeString(),hour:d.getHours(),month:d.getMonth()+1,
+ weekday:d.toLocaleDateString('en-US',{weekday:'long'}),lang:navigator.language,device:(/Mobi/.test(ua)?'mobile':'desktop')+' / '+os,
+ screen:screen.width+'x'+screen.height,dark:matchMedia('(prefers-color-scheme: dark)').matches,referrer:document.referrer?new URL(document.referrer).hostname:'(none)'}}
+go.onclick=async()=>{go.disabled=true;const r=await fetch('/api/reading',{method:'POST',headers:{'Content-Type':'application/json'},
+ body:JSON.stringify({age_ok:age.checked,fun_ok:fun.checked,mode:document.getElementById('mode').value,signals:signals()})});
+ const j=await r.json();go.disabled=false;const o=document.getElementById('out');o.hidden=false;
+ if(j.error&&!j.reading){document.getElementById('text').textContent=j.error;return}
+ document.getElementById('text').textContent=j.reading;document.getElementById('img').src=j.image.src;
+ document.getElementById('credit').innerHTML=`Photo by <a href="${j.image.profile}">${j.image.by}</a> on <a href="${j.image.page}">Unsplash</a>`;
+ document.getElementById('meta').textContent=`AI-generated for entertainment only · generator: ${j.mode} (${j.model})${j.filtered?' · safety filter replaced output':''}`;
+ document.getElementById('used').textContent=JSON.stringify(j.used,null,2)};
+</script>{% endblock %}
